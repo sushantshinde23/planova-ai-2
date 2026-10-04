@@ -123,41 +123,49 @@ export function getRuntimeEnvironmentInfo() {
 
 const env = (import.meta as any).env || {};
 
-// Strictly ensure all Firebase configuration keys belong to the SAME configured Firebase project
-const resolvedProjectId =
-  env.VITE_FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId;
-const isSameProject = resolvedProjectId === firebaseAppletConfig.projectId;
+// Allow clean override via VITE_FIREBASE_* environment variables (e.g., on Vercel)
+// while ensuring all keys belong to a consistent Firebase project
+const hasCompleteCustomEnvProject = Boolean(
+  env.VITE_FIREBASE_PROJECT_ID &&
+    env.VITE_FIREBASE_API_KEY &&
+    env.VITE_FIREBASE_APP_ID
+);
 
-// Never use localhost as authDomain; always use the valid Firebase project authDomain
-const rawAuthDomain = isSameProject
-  ? env.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain
+const activeProjectId = hasCompleteCustomEnvProject
+  ? env.VITE_FIREBASE_PROJECT_ID
+  : firebaseAppletConfig.projectId;
+
+const rawAuthDomain = hasCompleteCustomEnvProject
+  ? env.VITE_FIREBASE_AUTH_DOMAIN || `${activeProjectId}.firebaseapp.com`
   : firebaseAppletConfig.authDomain;
 
+// Never use localhost as authDomain; always use the valid Firebase project authDomain
 const sanitizedAuthDomain =
   rawAuthDomain &&
   !rawAuthDomain.includes('localhost') &&
   !rawAuthDomain.includes('127.0.0.1')
     ? rawAuthDomain
-    : `${firebaseAppletConfig.projectId}.firebaseapp.com`;
+    : `${activeProjectId}.firebaseapp.com`;
 
 export const firebaseConfig = {
-  projectId: firebaseAppletConfig.projectId,
-  appId: isSameProject
-    ? env.VITE_FIREBASE_APP_ID || firebaseAppletConfig.appId
+  projectId: activeProjectId,
+  appId: hasCompleteCustomEnvProject
+    ? env.VITE_FIREBASE_APP_ID
     : firebaseAppletConfig.appId,
-  apiKey: isSameProject
-    ? env.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey
+  apiKey: hasCompleteCustomEnvProject
+    ? env.VITE_FIREBASE_API_KEY
     : firebaseAppletConfig.apiKey,
   authDomain: sanitizedAuthDomain,
-  firestoreDatabaseId:
-    env.VITE_FIREBASE_FIRESTORE_DATABASE_ID ||
-    (firebaseAppletConfig as any).firestoreDatabaseId,
-  storageBucket: isSameProject
-    ? env.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket
+  firestoreDatabaseId: hasCompleteCustomEnvProject
+    ? env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || ''
+    : env.VITE_FIREBASE_FIRESTORE_DATABASE_ID ||
+      (firebaseAppletConfig as any).firestoreDatabaseId,
+  storageBucket: hasCompleteCustomEnvProject
+    ? env.VITE_FIREBASE_STORAGE_BUCKET || `${activeProjectId}.firebasestorage.app`
     : firebaseAppletConfig.storageBucket,
-  messagingSenderId: isSameProject
-    ? env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId
-    : firebaseAppletConfig.messagingSenderId,
+  messagingSenderId: hasCompleteCustomEnvProject
+    ? env.VITE_FIREBASE_MESSAGING_SENDER_ID || '1074828390225'
+    : env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId,
 };
 
 let app: FirebaseApp;
