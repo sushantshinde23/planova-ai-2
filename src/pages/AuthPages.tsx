@@ -909,7 +909,7 @@ export const AuthPages: React.FC<{
           <div className="flex items-center gap-2 text-xs font-mono text-[#64748b] dark:text-slate-400">
             <span>AUTHENTICATED OPERATOR PROFILE</span>
             <span aria-hidden="true">·</span>
-            <span>FIRESTORE PERSISTENCE</span>
+            <span>ENCRYPTED SESSION PERSISTENCE</span>
           </div>
           <h1 className="text-xl font-black text-[#0f172a] dark:text-white tracking-tight mt-0.5">
             Profile, Account Settings & Security Governance

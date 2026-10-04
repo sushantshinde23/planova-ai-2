@@ -25,18 +25,14 @@ import {
 } from '../data/seedData';
 import {
   auth,
-  db,
   onAuthStateChanged,
+  getStoredSessionUser,
   loginWithEmailPassword,
   registerWithEmailPassword,
   loginWithGoogle,
-  checkGoogleRedirectResult,
-  buildUserFromFirebaseUser,
   logoutAuthenticatedUser,
-  syncUserProfileToFirestore,
   updateFirestoreUserProfile,
 } from '../lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
 
 export type SettingsTabType = 'profile' | 'account' | 'preferences' | 'security';
 
@@ -190,81 +186,38 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     },
   });
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return Boolean(getStoredSessionUser());
+  });
+  const [authLoading, setAuthLoading] = useState<boolean>(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTabType>('profile');
 
-  // Helper to mirror operational entities to Cloud Firestore when authenticated
-  const mirrorToFirestore = async (collectionName: string, docId: string, payload: any) => {
-    try {
-      if (auth.currentUser) {
-        await setDoc(doc(db, collectionName, docId), JSON.parse(JSON.stringify(payload)), {
-          merge: true,
-        });
-      }
-    } catch {
-      // non-blocking cloud sync
-    }
-  };
+  // No-op cloud mirror stub (data is persisted via backend API & local storage)
+  const mirrorToFirestore = async (_collectionName: string, _docId: string, _payload: any) => {};
 
-  // Global Firebase authentication state listener (single source of truth)
+  // Global authentication state listener
   useEffect(() => {
     let mounted = true;
 
-    // Clear any legacy plaintext credentials if ever stored
-    try {
-      localStorage.removeItem('planova_password');
-      sessionStorage.removeItem('planova_password');
-    } catch {}
+    const initialUser = getStoredSessionUser();
+    if (initialUser && mounted) {
+      setCurrentUser(initialUser);
+      setIsAuthenticated(true);
+      if (initialUser.preferences?.theme) setThemeState(initialUser.preferences.theme);
+      if (initialUser.preferences?.language) setLanguageState(initialUser.preferences.language);
+    }
 
-    // Check if returning from a Google OAuth redirect flow
-    checkGoogleRedirectResult()
-      .then((redirectRes) => {
-        if (redirectRes && mounted) {
-          setCurrentUser(redirectRes.user);
-          setIsAuthenticated(true);
-        }
-      })
-      .catch((err) => {
-        console.warn('Google redirect check:', err);
-      });
-
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (sessionUser) => {
       if (!mounted) return;
-
-      if (fbUser && !fbUser.isAnonymous) {
-        // Optimistically set authenticated user from Firebase User so UI never flashes or blocks on Firestore
-        const baseUser = buildUserFromFirebaseUser(fbUser);
-        setCurrentUser(baseUser);
+      if (sessionUser) {
+        setCurrentUser(sessionUser);
         setIsAuthenticated(true);
-        setAuthLoading(false);
-
-        try {
-          const idToken = await fbUser.getIdToken();
-          localStorage.setItem('planova_session_token', idToken);
-        } catch {}
-
-        // Synchronize full profile with Firestore in background
-        try {
-          const synced = await syncUserProfileToFirestore(baseUser);
-          if (mounted) {
-            setCurrentUser(synced);
-            if (synced.preferences?.theme) setThemeState(synced.preferences.theme);
-            if (synced.preferences?.language) setLanguageState(synced.preferences.language);
-          }
-        } catch (syncErr) {
-          console.warn('Profile sync warning:', syncErr);
-        }
+        if (sessionUser.preferences?.theme) setThemeState(sessionUser.preferences.theme);
+        if (sessionUser.preferences?.language) setLanguageState(sessionUser.preferences.language);
       } else {
         setIsAuthenticated(false);
-        setAuthLoading(false);
-        try {
-          localStorage.removeItem('planova_session_token');
-          localStorage.removeItem('planova_user_profile');
-          sessionStorage.removeItem('planova_session_token');
-          sessionStorage.removeItem('planova_user_profile');
-        } catch {}
       }
+      setAuthLoading(false);
     });
 
     return () => {

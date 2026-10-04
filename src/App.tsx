@@ -177,7 +177,7 @@ function AppContent() {
         </div>
         <div className="flex items-center gap-2.5 text-xs font-mono uppercase tracking-wider text-slate-600 dark:text-slate-300">
           <span className="w-2 h-2 rounded-full bg-[#2563EB] animate-ping" />
-          <span>Verifying Firebase Authentication Session...</span>
+          <span>Verifying Operator Session...</span>
         </div>
       </div>
     );
