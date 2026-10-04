@@ -30,6 +30,8 @@ import {
   loginWithEmailPassword,
   registerWithEmailPassword,
   loginWithGoogle,
+  checkGoogleRedirectResult,
+  buildUserFromFirebaseUser,
   logoutAuthenticatedUser,
   syncUserProfileToFirestore,
   updateFirestoreUserProfile,
@@ -82,7 +84,7 @@ interface MissionContextType {
   setSettingsTab: (tab: SettingsTabType) => void;
   loginWithEmail: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   registerAccount: (fullName: string, email: string, password: string) => Promise<void>;
-  loginWithGoogleProvider: () => Promise<void>;
+  loginWithGoogleProvider: (rememberMe?: boolean) => Promise<void>;
   updateUserProfile: (updates: Partial<User>) => Promise<void>;
   logout: () => Promise<void>;
   setActiveMissionId: (id: string) => void;
@@ -188,16 +190,7 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     },
   });
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    try {
-      const token =
-        localStorage.getItem('planova_session_token') ||
-        sessionStorage.getItem('planova_session_token');
-      return !!token;
-    } catch {
-      return false;
-    }
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [settingsTab, setSettingsTab] = useState<SettingsTabType>('profile');
 
@@ -214,52 +207,64 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Restore session from backend API and Firebase Auth
+  // Global Firebase authentication state listener (single source of truth)
   useEffect(() => {
     let mounted = true;
 
-    const restoreSession = async () => {
-      try {
-        const token =
-          localStorage.getItem('planova_session_token') ||
-          sessionStorage.getItem('planova_session_token');
+    // Clear any legacy plaintext credentials if ever stored
+    try {
+      localStorage.removeItem('planova_password');
+      sessionStorage.removeItem('planova_password');
+    } catch {}
 
-        if (token) {
-          const data = await apiClient.getCurrentUser();
-          if (data.authenticated && data.user && mounted) {
-            setCurrentUser(data.user);
-            setIsAuthenticated(true);
-            if (data.user.preferences?.theme) setThemeState(data.user.preferences.theme);
-            if (data.user.preferences?.language) setLanguageState(data.user.preferences.language);
-          }
-        }
-      } catch (e) {
-        console.warn('Session check warning:', e);
-      } finally {
-        if (mounted) setAuthLoading(false);
-      }
-    };
-
-    restoreSession();
-
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser && fbUser.email && !fbUser.isAnonymous) {
-        const synced = await syncUserProfileToFirestore({
-          id: fbUser.uid,
-          name: fbUser.displayName || fbUser.email.split('@')[0],
-          email: fbUser.email,
-          role: 'operator',
-          department: 'Emergency & Civil Defense Operations',
-          avatarUrl: fbUser.photoURL || undefined,
-          authProvider: fbUser.providerData[0]?.providerId === 'google.com' ? 'google' : 'email',
-          emailVerified: fbUser.emailVerified,
-        });
-        if (mounted) {
-          setCurrentUser(synced);
+    // Check if returning from a Google OAuth redirect flow
+    checkGoogleRedirectResult()
+      .then((redirectRes) => {
+        if (redirectRes && mounted) {
+          setCurrentUser(redirectRes.user);
           setIsAuthenticated(true);
         }
+      })
+      .catch((err) => {
+        console.warn('Google redirect check:', err);
+      });
+
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (!mounted) return;
+
+      if (fbUser && !fbUser.isAnonymous) {
+        // Optimistically set authenticated user from Firebase User so UI never flashes or blocks on Firestore
+        const baseUser = buildUserFromFirebaseUser(fbUser);
+        setCurrentUser(baseUser);
+        setIsAuthenticated(true);
+        setAuthLoading(false);
+
+        try {
+          const idToken = await fbUser.getIdToken();
+          localStorage.setItem('planova_session_token', idToken);
+        } catch {}
+
+        // Synchronize full profile with Firestore in background
+        try {
+          const synced = await syncUserProfileToFirestore(baseUser);
+          if (mounted) {
+            setCurrentUser(synced);
+            if (synced.preferences?.theme) setThemeState(synced.preferences.theme);
+            if (synced.preferences?.language) setLanguageState(synced.preferences.language);
+          }
+        } catch (syncErr) {
+          console.warn('Profile sync warning:', syncErr);
+        }
+      } else {
+        setIsAuthenticated(false);
+        setAuthLoading(false);
+        try {
+          localStorage.removeItem('planova_session_token');
+          localStorage.removeItem('planova_user_profile');
+          sessionStorage.removeItem('planova_session_token');
+          sessionStorage.removeItem('planova_user_profile');
+        } catch {}
       }
-      if (mounted) setAuthLoading(false);
     });
 
     return () => {
@@ -274,7 +279,17 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const storage = rememberMe ? localStorage : sessionStorage;
       if (token) storage.setItem('planova_session_token', token);
-      storage.setItem('planova_user_profile', JSON.stringify(user));
+      storage.setItem(
+        'planova_user_profile',
+        JSON.stringify({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          department: user.department,
+          authProvider: user.authProvider,
+        })
+      );
     } catch {}
   };
 
@@ -287,20 +302,20 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const registerAccount = async (fullName: string, email: string, password: string) => {
-    const { user, token } = await registerWithEmailPassword(fullName, email, password);
+    const { user, token } = await registerWithEmailPassword(fullName, email, password, true);
     persistSession(user, token, true);
     await refreshAll();
   };
 
-  const loginWithGoogleProvider = async () => {
-    const { user, token } = await loginWithGoogle();
-    persistSession(user, token, true);
+  const loginWithGoogleProvider = async (rememberMe: boolean = true) => {
+    const { user, token } = await loginWithGoogle(rememberMe);
+    persistSession(user, token, rememberMe);
     await refreshAll();
   };
 
   const updateUserProfile = async (updates: Partial<User>) => {
-    const payload = {
-      email: currentUser.email,
+    const updatedUser: User = {
+      ...currentUser,
       name: updates.name ?? currentUser.name,
       department: updates.department ?? currentUser.department,
       avatarUrl: updates.avatarUrl ?? currentUser.avatarUrl,
@@ -310,21 +325,31 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         : currentUser.preferences,
     };
 
-    const res = await apiClient.updateProfile(payload);
-    setCurrentUser(res.user);
-    setConnectionError(null);
-
+    setCurrentUser(updatedUser);
     if (updates.preferences?.theme) setTheme(updates.preferences.theme);
     if (updates.preferences?.language) setLanguage(updates.preferences.language);
 
-    await updateFirestoreUserProfile(res.user.id, updates);
+    await updateFirestoreUserProfile(updatedUser.id, updates);
+
+    try {
+      const res = await apiClient.updateProfile({
+        email: updatedUser.email,
+        name: updatedUser.name,
+        department: updatedUser.department,
+        avatarUrl: updatedUser.avatarUrl,
+        role: updatedUser.role,
+        preferences: updatedUser.preferences,
+      });
+      if (res?.user) {
+        setCurrentUser(res.user);
+      }
+      setConnectionError(null);
+    } catch {
+      // Firestore profile update already succeeded
+    }
   };
 
   const logout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch {}
-    await logoutAuthenticatedUser();
     setIsAuthenticated(false);
     try {
       localStorage.removeItem('planova_session_token');
@@ -332,6 +357,7 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       sessionStorage.removeItem('planova_session_token');
       sessionStorage.removeItem('planova_user_profile');
     } catch {}
+    await logoutAuthenticatedUser();
   };
 
   // Demo flow state

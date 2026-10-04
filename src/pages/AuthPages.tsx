@@ -4,6 +4,7 @@ import { ThemeToggle, LanguageSelector } from '../components/ThemeAndLanguageCon
 import {
   initiatePasswordReset,
   completePasswordReset,
+  mapFirebaseAuthError,
 } from '../lib/firebase';
 import { MissionCategory } from '../types';
 import {
@@ -93,6 +94,10 @@ export const AuthPortal: React.FC<{
   const switchMode = (next: 'login' | 'signup' | 'forgot' | 'reset') => {
     setErrorMsg(null);
     setInfoMsg(null);
+    setPassword('');
+    setConfirmPassword('');
+    setNewPassword('');
+    setConfirmNewPassword('');
     setMode(next);
   };
 
@@ -104,7 +109,8 @@ export const AuthPortal: React.FC<{
     setErrorMsg(null);
     setInfoMsg(null);
 
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       setErrorMsg('Please enter a valid email address.');
       return;
     }
@@ -115,10 +121,11 @@ export const AuthPortal: React.FC<{
 
     setIsSubmitting(true);
     try {
-      await loginWithEmail(email.trim(), password, rememberMe);
+      await loginWithEmail(cleanEmail, password, rememberMe);
+      setPassword('');
       onAuthSuccess();
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Authentication failed. Please check your credentials.');
+      setErrorMsg(mapFirebaseAuthError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -130,11 +137,14 @@ export const AuthPortal: React.FC<{
     setErrorMsg(null);
     setInfoMsg(null);
 
-    if (!fullName.trim() || fullName.trim().length < 2) {
+    const cleanName = fullName.trim();
+    const cleanEmail = email.trim();
+
+    if (!cleanName || cleanName.length < 2) {
       setErrorMsg('Please enter your full name (at least 2 characters).');
       return;
     }
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       setErrorMsg('Please enter a valid email address.');
       return;
     }
@@ -153,10 +163,12 @@ export const AuthPortal: React.FC<{
 
     setIsSubmitting(true);
     try {
-      await registerAccount(fullName.trim(), email.trim(), password);
+      await registerAccount(cleanName, cleanEmail, password);
+      setPassword('');
+      setConfirmPassword('');
       onAuthSuccess();
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Registration failed. Please verify your information.');
+      setErrorMsg(mapFirebaseAuthError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -168,14 +180,10 @@ export const AuthPortal: React.FC<{
     setInfoMsg(null);
     setIsSubmitting(true);
     try {
-      await loginWithGoogleProvider();
+      await loginWithGoogleProvider(rememberMe);
       onAuthSuccess();
     } catch (err: any) {
-      if (err?.code === 'auth/popup-closed-by-user') {
-        setErrorMsg('Google sign-in window was closed before completing authentication.');
-      } else {
-        setErrorMsg(err?.message || 'Google OAuth authentication could not be completed.');
-      }
+      setErrorMsg(mapFirebaseAuthError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -187,20 +195,21 @@ export const AuthPortal: React.FC<{
     setErrorMsg(null);
     setInfoMsg(null);
 
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       setErrorMsg('Please enter a valid email address.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const res = await initiatePasswordReset(email.trim());
+      const res = await initiatePasswordReset(cleanEmail);
       if (res.resetToken) {
         setResetToken(res.resetToken);
       }
       setInfoMsg(res.message);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Unable to process password reset request.');
+      setErrorMsg(mapFirebaseAuthError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -230,7 +239,7 @@ export const AuthPortal: React.FC<{
       switchMode('login');
       setInfoMsg(res.message);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Password reset failed.');
+      setErrorMsg(mapFirebaseAuthError(err));
     } finally {
       setIsSubmitting(false);
     }

@@ -589,10 +589,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   {isAuthenticated && (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         setActivePopover(null);
-                        logout();
-                        onNavigate('landing');
+                        await logout();
+                        onNavigate('auth');
                       }}
                       className="w-full text-left px-3 py-2 rounded-lg text-[#DC2626] hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer"
                     >
