@@ -1,0 +1,335 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Authenticated operator or administrator profile with role-based clearance and preferences.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Unique identifier matching the authenticated Firebase user ID."
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Full display name of the user."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User's email address."
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Optional profile avatar URL."
+        },
+        "authProvider": {
+          "type": "string",
+          "enum": ["email", "google"],
+          "description": "Authentication provider used."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp when the account was created."
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "description": "ISO timestamp of most recent sign-in."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "operator", "viewer"],
+          "description": "Role-based access control tier."
+        },
+        "department": {
+          "type": "string",
+          "description": "Operational department or command unit."
+        },
+        "emailVerified": {
+          "type": "boolean",
+          "description": "Whether the user's email has been verified."
+        }
+      },
+      "required": ["uid", "fullName", "email", "authProvider", "createdAt", "lastLoginAt", "role"]
+    },
+    "Mission": {
+      "title": "Mission",
+      "description": "Operational mission record created and executed by PLANOVA AI.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique mission ID."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID."
+        },
+        "title": {
+          "type": "string",
+          "description": "Mission title."
+        },
+        "objective": {
+          "type": "string",
+          "description": "Core operational goal."
+        },
+        "category": {
+          "type": "string",
+          "description": "Mission domain."
+        },
+        "status": {
+          "type": "string",
+          "description": "Current execution status."
+        },
+        "priority": {
+          "type": "string",
+          "description": "Mission priority tier."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp."
+        }
+      },
+      "required": ["id", "title", "objective", "category", "status"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Individual executable task node within a mission dependency graph.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique task ID."
+        },
+        "missionId": {
+          "type": "string",
+          "description": "Associated mission ID."
+        },
+        "title": {
+          "type": "string",
+          "description": "Task name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Task description."
+        },
+        "status": {
+          "type": "string",
+          "description": "Execution status."
+        }
+      },
+      "required": ["id", "missionId", "title", "status"]
+    },
+    "PlanVersion": {
+      "title": "PlanVersion",
+      "description": "Immutable versioned mission plan generated initially or during autonomous re-planning.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Plan version ID."
+        },
+        "missionId": {
+          "type": "string",
+          "description": "Mission ID."
+        },
+        "version": {
+          "type": "number",
+          "description": "Sequential version number."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for plan version creation."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp."
+        }
+      },
+      "required": ["id", "missionId", "version", "reason", "createdAt"]
+    },
+    "MissionEvent": {
+      "title": "MissionEvent",
+      "description": "Telemetry disruption, alert, or operational event recorded during mission execution.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Event ID."
+        },
+        "missionId": {
+          "type": "string",
+          "description": "Mission ID."
+        },
+        "type": {
+          "type": "string",
+          "description": "Event classification."
+        },
+        "title": {
+          "type": "string",
+          "description": "Event summary."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Event timestamp."
+        }
+      },
+      "required": ["id", "missionId", "type", "title", "timestamp"]
+    },
+    "Resource": {
+      "title": "Resource",
+      "description": "Operational vehicle, shelter, personnel, or equipment asset.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Resource ID."
+        },
+        "name": {
+          "type": "string",
+          "description": "Resource name."
+        },
+        "type": {
+          "type": "string",
+          "description": "Resource type."
+        },
+        "status": {
+          "type": "string",
+          "description": "Availability status."
+        }
+      },
+      "required": ["id", "name", "type", "status"]
+    },
+    "Approval": {
+      "title": "Approval",
+      "description": "Human-in-the-loop governance request and operator decision.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Approval ID."
+        },
+        "missionId": {
+          "type": "string",
+          "description": "Mission ID."
+        },
+        "taskId": {
+          "type": "string",
+          "description": "Task ID."
+        },
+        "status": {
+          "type": "string",
+          "description": "Approval status."
+        }
+      },
+      "required": ["id", "missionId", "taskId", "status"]
+    },
+    "DocumentRecord": {
+      "title": "DocumentRecord",
+      "description": "Uploaded operational document metadata and extracted entities.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document ID."
+        },
+        "missionId": {
+          "type": "string",
+          "description": "Mission ID."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID."
+        },
+        "name": {
+          "type": "string",
+          "description": "Document file name."
+        }
+      },
+      "required": ["id", "missionId", "name"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Tamper-evident operational audit log record.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Audit log ID."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Timestamp."
+        },
+        "action": {
+          "type": "string",
+          "description": "Recorded action."
+        },
+        "user": {
+          "type": "string",
+          "description": "Actor name."
+        }
+      },
+      "required": ["id", "timestamp", "action", "user"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Stores persistent user profile, preferences, and security metadata."
+    },
+    "/missions/{missionId}": {
+      "schema": {
+        "$ref": "#/entities/Mission"
+      },
+      "description": "Stores persistent missions created or managed by operators."
+    },
+    "/tasks/{taskId}": {
+      "schema": {
+        "$ref": "#/entities/Task"
+      },
+      "description": "Stores persistent mission tasks and their execution state."
+    },
+    "/plan_versions/{planId}": {
+      "schema": {
+        "$ref": "#/entities/PlanVersion"
+      },
+      "description": "Stores immutable plan versions for missions."
+    },
+    "/mission_events/{eventId}": {
+      "schema": {
+        "$ref": "#/entities/MissionEvent"
+      },
+      "description": "Stores persistent mission events and disruptions."
+    },
+    "/resources/{resourceId}": {
+      "schema": {
+        "$ref": "#/entities/Resource"
+      },
+      "description": "Stores persistent operational resources and allocations."
+    },
+    "/approvals/{approvalId}": {
+      "schema": {
+        "$ref": "#/entities/Approval"
+      },
+      "description": "Stores persistent human-in-the-loop governance requests."
+    },
+    "/documents/{documentId}": {
+      "schema": {
+        "$ref": "#/entities/DocumentRecord"
+      },
+      "description": "Stores uploaded document metadata scoped to authenticated users."
+    },
+    "/audit_logs/{auditId}": {
+      "schema": {
+        "$ref": "#/entities/AuditLog"
+      },
+      "description": "Stores persistent audit log entries."
+    }
+  }
+}

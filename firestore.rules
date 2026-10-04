@@ -1,0 +1,81 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'fullName', 'email', 'authProvider', 'createdAt', 'lastLoginAt', 'role']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128 &&
+             data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 180 &&
+             data.authProvider in ['email', 'google'] &&
+             data.role in ['admin', 'operator', 'viewer'] &&
+             data.createdAt is string && data.createdAt.size() <= 64 &&
+             data.lastLoginAt is string && data.lastLoginAt.size() <= 64;
+    }
+
+    // ===============================================================
+    // Users Collection (/users/{userId})
+    // ===============================================================
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+                       isValidUserProfile(request.resource.data) &&
+                       request.resource.data.uid == request.auth.uid;
+      allow update: if isOwner(userId) &&
+                       isValidUserProfile(request.resource.data) &&
+                       request.resource.data.uid == resource.data.uid &&
+                       request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isOwner(userId);
+    }
+
+    // ===============================================================
+    // Operational Collections (Missions, Tasks, Plans, Events, Resources, Approvals, Documents, Audit Logs)
+    // ===============================================================
+    match /missions/{missionId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /tasks/{taskId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /plan_versions/{planId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /mission_events/{eventId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /resources/{resourceId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /approvals/{approvalId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /documents/{documentId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /audit_logs/{auditId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /test/{docId} {
+      allow read: if true;
+    }
+  }
+}
